@@ -1,0 +1,8 @@
+langgraph
+langchain
+langchain-ollama
+ollama
+pydantic
+fastapi
+uvicorn
+jinja2
