@@ -29,6 +29,7 @@ Thumbs.db
 # Segredos e configurações locais
 .env
 .env.*
+!.env.example
 
 # Saídas de build
 build/
