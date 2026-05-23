@@ -1,1 +1,0 @@
-"""Camada web da aplicação."""

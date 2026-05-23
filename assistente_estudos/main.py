@@ -1,19 +1,20 @@
-"""Ponto de entrada da aplicação web.
+"""Ponto de entrada da API do Assistente de Estudos.
 
-Este arquivo concentra a inicialização do aplicativo web e a conexão com a
-camada de orquestração, sem implementar comportamento funcional nesta base.
+Este arquivo concentra a inicialização da aplicação FastAPI exposta para o
+frontend externo consumir.
 """
 
 from __future__ import annotations
 
-from assistente_estudos.core.graph_builder import build_graph
-from assistente_estudos.web.app import create_app
+from assistente_estudos.api.app import create_app
+
+
+app = create_app()
 
 
 def main() -> None:
-    """Inicializa a aplicação web."""
+    """Inicializa a aplicação API."""
 
-    build_graph()
     create_app()
 
 

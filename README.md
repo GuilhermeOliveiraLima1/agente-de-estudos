@@ -1,14 +1,14 @@
 # Assistente de Planejamento de Estudos Inteligente
 
-Projeto em Python preparado para evoluir para um assistente de estudos com LangGraph, integração futura a LLaMA via Ollama, persistência em banco e interface web.
+Projeto em Python preparado para evoluir para um assistente de estudos com LangGraph, integração futura a LLaMA via Ollama, persistência em banco e API para consumo por um frontend separado.
 
-Esta versão contém apenas a estrutura arquitetural inicial. Não há lógica de negócio implementada ainda.
+Esta versão contém apenas a estrutura arquitetural inicial. Não há interface web neste repositório.
 
 ## Objetivo
 
 Organizar o sistema em camadas bem definidas para permitir crescimento sem acoplamento excessivo:
 
-- interface web
+- API JSON para consumo externo
 - orquestração com LangGraph
 - nós separados por responsabilidade
 - estado tipado compartilhado entre etapas
@@ -31,20 +31,20 @@ assistente_estudos/
 │   ├── simulation_node.py
 │   ├── analysis_node.py
 │   └── report_node.py
-├── services/
-│   ├── llm_service.py
-│   └── persistence_service.py
-└── web/
-    ├── app.py
-    ├── routes.py
-    ├── dependencies.py
-    ├── templates/
-    └── static/
+├── api/
+│   ├── app.py
+│   ├── routes.py
+│   ├── schemas.py
+│   └── dependencies.py
+└── services/
+    ├── agent_service.py
+    ├── llm_service.py
+    └── persistence_service.py
 ```
 
 ## Como o fluxo funciona
 
-O ponto de entrada da aplicação é [assistente_estudos/main.py](assistente_estudos/main.py). Ele inicializa o grafo e prepara a aplicação web. Nesta base inicial, a execução ainda não processa dados de fato, mas o caminho já está separado para crescer de forma limpa.
+O ponto de entrada da aplicação é [assistente_estudos/main.py](assistente_estudos/main.py). Ele expõe a aplicação FastAPI da API e mantém a base pronta para ser consumida por outro frontend. Nesta fase, a API já devolve contratos JSON estruturados, mas a lógica dos agentes ainda está em fase estrutural.
 
 O grafo é montado em [assistente_estudos/core/graph_builder.py](assistente_estudos/core/graph_builder.py). Esse arquivo registra os nós do fluxo no LangGraph e concentra a orquestração de alto nível.
 
@@ -60,16 +60,74 @@ Os nós do fluxo estão em [assistente_estudos/nodes](assistente_estudos/nodes).
 
 Os serviços ficam em [assistente_estudos/services](assistente_estudos/services). Eles existem para isolar detalhes técnicos:
 
+- `agent_service.py`: fronteira da API para os fluxos de agentes.
 - `llm_service.py`: integração futura com Ollama/LLaMA.
 - `persistence_service.py`: persistência em banco ou outro armazenamento.
 
-A interface web fica em [assistente_estudos/web](assistente_estudos/web), separando a apresentação da lógica de orquestração:
+A camada HTTP fica em [assistente_estudos/api](assistente_estudos/api), separando os contratos JSON da lógica de orquestração:
 
-- `app.py`: cria a aplicação web.
-- `routes.py`: define as rotas e páginas da interface.
-- `dependencies.py`: concentra dependências compartilhadas da camada web.
-- `templates/`: arquivos HTML renderizados pela interface.
-- `static/`: CSS, JavaScript e imagens.
+- `app.py`: cria a aplicação FastAPI.
+- `routes.py`: define as rotas JSON da API.
+- `schemas.py`: contratos de entrada e saída.
+- `dependencies.py`: concentra dependências compartilhadas da API.
+
+## Como criar um novo agente
+
+Para adicionar um novo agente, siga esta ordem:
+
+1. Crie um nó em [assistente_estudos/nodes](assistente_estudos/nodes) seguindo o padrão dos arquivos existentes.
+2. Registre esse nó em [assistente_estudos/core/graph_builder.py](assistente_estudos/core/graph_builder.py) para mantê-lo disponível na orquestração.
+3. Exponha a etapa em [assistente_estudos/services/agent_service.py](assistente_estudos/services/agent_service.py), adicionando o nome do agente na lista interna e o comportamento estrutural correspondente.
+4. Se o payload ou a resposta mudarem, atualize os schemas em [assistente_estudos/api/schemas.py](assistente_estudos/api/schemas.py).
+5. Crie ou ajuste a rota em [assistente_estudos/api/routes.py](assistente_estudos/api/routes.py) para publicar o novo endpoint JSON.
+
+Padrão recomendado para cada agente:
+
+- um arquivo por responsabilidade em `nodes/`
+- uma única etapa exposta por vez na API
+- entrada e saída tipadas via Pydantic quando houver contrato novo
+- lógica de orquestração centralizada em `agent_service.py`
+
+### Local dos agentes
+
+Criamos uma pasta dedicada para agentes em [assistente_estudos/agents](assistente_estudos/agents). Ela contém templates:
+
+- `planner_agent.py`
+- `replan_agent.py`
+- `simulation_agent.py`
+- `analysis_agent.py`
+- `report_agent.py`
+
+Cada arquivo é um template que chama o respectivo nó em `assistente_estudos/nodes`. Você pode editar esses templates para implementar a lógica do agente, ou substituir por implementações mais completas.
+
+## Como usar a API
+
+O backend expõe a aplicação FastAPI com prefixo `/api`.
+
+Endpoints principais:
+
+- `GET /api/health`: verifica se o serviço está no ar.
+- `GET /api/agents`: lista os agentes disponíveis.
+- `POST /api/agents/planner`: executa a etapa de planejamento.
+- `POST /api/agents/replan`: executa a etapa de replanejamento.
+- `POST /api/agents/simulation`: executa a etapa de simulação.
+- `POST /api/agents/analysis`: executa a etapa de análise.
+- `POST /api/agents/report`: executa a etapa de relatório.
+- `POST /api/agents/pipeline`: executa o fluxo completo.
+
+Exemplo de uso com `curl`:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/agents/planner \
+    -H "Content-Type: application/json" \
+    -d "{\"user_name\": \"Ana\", \"study_goal\": \"Concurso\", \"subjects\": [\"Matemática\", \"Português\"]}"
+```
+
+Resposta esperada na fase atual:
+
+- `status`: retorna `structural`
+- `message`: indica que a estrutura da API está pronta
+- `state`: devolve o payload recebido com metadados atualizados
 
 ## Fluxos planejados
 
@@ -106,19 +164,79 @@ As dependências principais estão em [requirements.txt](requirements.txt):
 - `pydantic`
 - `fastapi`
 - `uvicorn`
-- `jinja2`
 
 ## Execução futura
 
 Quando a implementação começar, o fluxo esperado será:
 
-1. o usuário acessa a interface web
-2. a rota web coleta os dados do formulário
-3. o estado inicial é montado
-4. o grafo LangGraph coordena os nós
-5. os serviços consultam/persistem dados
-6. o relatório final é gerado e exibido/exportado
+1. o frontend externo envia os dados para a API
+2. a rota JSON valida o payload e monta o estado inicial
+3. o grafo LangGraph coordena os nós
+4. os serviços consultam/persistem dados
+5. a resposta final é devolvida para o frontend exibir/exportar
+
+## Como rodar a API
+
+Use o `uvicorn` apontando para o `main.py` da raiz:
+
+```bash
+uvicorn main:app --reload
+```
+
+Se quiser mudar host ou porta, ajuste [assistente_estudos/config.py](assistente_estudos/config.py).
+
+## Instalação (passo a passo)
+
+Recomendo usar um ambiente virtual. As instruções abaixo são para Windows (PowerShell) e uma alternativa genérica POSIX.
+
+1. Crie e ative um ambiente virtual (PowerShell):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+Alternativa POSIX (macOS / Linux):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+2. Instale dependências:
+
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+3. Rode a API em desenvolvimento:
+
+```bash
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
+4. Teste rapidamente (exemplo):
+
+```bash
+curl -X GET http://127.0.0.1:8000/api/health
+```
+
+5. (Opcional) Se ambientes virtuais ou caches foram acidentalmente versionados, remova-os do índice do git e atualize o `.gitignore` assim:
+
+```bash
+# adicionar entradas ao .gitignore (se ainda não estiverem lá)
+echo ".venv/" >> .gitignore
+echo "venv/" >> .gitignore
+echo "__pycache__/" >> .gitignore
+
+# remover do índice sem apagar localmente
+git rm -r --cached .venv venv "__pycache__" || true
+git commit -m "Remove ambientes virtuais e caches do repositório"
+```
+
+Observação: `python` deve ser uma versão compatível (3.10+ recomendada). Ajuste os comandos conforme sua shell preferida.
 
 ## Observação
 
-Este repositório está somente com a base estrutural. Todas as funções e classes foram deixadas sem lógica propositalmente para servir como fundação da implementação posterior.
+Este repositório está somente com a base estrutural. A camada web foi removida para manter apenas a API de backend consumida por outro projeto de frontend.
