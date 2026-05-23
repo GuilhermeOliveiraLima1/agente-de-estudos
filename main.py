@@ -1,9 +1,22 @@
-"""Ponte de entrada para execução com Uvicorn.
+﻿"""Ponto de entrada da aplicação.
 
-Este arquivo existe para permitir o comando `uvicorn main:app --reload` na
-raiz do projeto, encaminhando para a aplicação API real do pacote.
+Execute com: uvicorn main:app --reload
 """
 
 from __future__ import annotations
 
-from assistente_estudos.api.app import app
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+
+from assistente_estudos.api.app import create_app
+from assistente_estudos.db.database import init_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+app = create_app(lifespan=lifespan)

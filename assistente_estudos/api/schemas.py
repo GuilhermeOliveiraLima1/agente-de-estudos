@@ -1,4 +1,4 @@
-"""Schemas de entrada e saída da API de agentes."""
+﻿"""Schemas de entrada e saída da API."""
 
 from __future__ import annotations
 
@@ -7,8 +7,106 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
+# ---------------------------------------------------------------------------
+# Sistema
+# ---------------------------------------------------------------------------
+
+class HealthResponse(BaseModel):
+    status: str
+    service: str
+
+
+# ---------------------------------------------------------------------------
+# Usuários
+# ---------------------------------------------------------------------------
+
+class UsuarioCreate(BaseModel):
+    nome: str
+    email: str
+
+
+class UsuarioResponse(BaseModel):
+    id: str
+    nome: str
+    email: str
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Sessões de estudo
+# ---------------------------------------------------------------------------
+
+class SessaoCreate(BaseModel):
+    usuario_id: str
+    disciplina: str
+    topico: str
+    duracao_minutos: int
+    concluido: bool = True
+    dificuldade_percebida: Optional[int] = 3
+
+
+class SessaoResponse(BaseModel):
+    id: str
+    usuario_id: str
+    disciplina: str
+    topico: str
+    duracao_minutos: int
+    concluido: bool
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Simulados
+# ---------------------------------------------------------------------------
+
+class SimuladoCreate(BaseModel):
+    usuario_id: str
+    disciplina: str
+    topico: str
+    total_questoes: int
+    acertos: int
+    nivel_dificuldade: str = "intermediario"
+
+
+class SimuladoResponse(BaseModel):
+    id: str
+    usuario_id: str
+    disciplina: str
+    topico: str
+    total_questoes: int
+    acertos: int
+    taxa_acerto: float
+    nivel_dificuldade: str
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Análise de desempenho
+# ---------------------------------------------------------------------------
+
+class AnaliseResponse(BaseModel):
+    usuario_id: str
+    periodo_dias: int
+    indice_prontidao: Optional[float] = None
+    classificacao: Optional[str] = None
+    score_dominio: Optional[float] = None
+    score_consistencia: Optional[float] = None
+    score_retencao: Optional[float] = None
+    topicos_frageis: List[str] = Field(default_factory=list)
+    tendencia: Optional[str] = None
+    parecer: Optional[str] = None
+    resultado_id: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Agentes (nós do LangGraph)
+# ---------------------------------------------------------------------------
+
 class StudyStatePayload(BaseModel):
-    """Representa o estado trocado entre frontend e backend."""
+    """Payload de entrada para as rotas de agentes."""
 
     session_id: Optional[str] = None
     user_name: Optional[str] = None
@@ -26,39 +124,18 @@ class StudyStatePayload(BaseModel):
     analysis_output: Dict[str, Any] = Field(default_factory=dict)
     report_data: Dict[str, Any] = Field(default_factory=dict)
     report_text: Optional[str] = None
-    llm_provider: Optional[str] = None
-    llm_model: Optional[str] = None
-    messages: List[Dict[str, Any]] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class AgentStepResponse(BaseModel):
-    """Resposta estruturada para uma etapa específica do fluxo."""
+    """Resposta de uma etapa individual do fluxo de agentes."""
 
     step: str
-    status: str
-    message: str
     state: Dict[str, Any]
 
 
 class AgentPipelineResponse(BaseModel):
-    """Resposta estruturada para a execução completa do pipeline."""
+    """Resposta da execução completa do pipeline de agentes."""
 
-    status: str
-    message: str
-    results: List[Dict[str, Any]]
+    steps: List[str]
     state: Dict[str, Any]
-
-
-class AgentInfo(BaseModel):
-    """Metadados sobre os agentes disponíveis na API."""
-
-    name: str
-    description: str
-
-
-class HealthResponse(BaseModel):
-    """Resposta simples para verificação de saúde."""
-
-    status: str
-    service: str

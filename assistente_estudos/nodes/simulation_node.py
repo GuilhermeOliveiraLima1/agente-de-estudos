@@ -1,8 +1,4 @@
-"""Nó responsável pela simulação do plano de estudos.
-
-A simulação permite antecipar como o cronograma e a distribuição do tempo se
-comportariam antes de gerar saídas finais.
-"""
+﻿"""Ponte entre o grafo principal e o sub-grafo de simulação."""
 
 from __future__ import annotations
 
@@ -10,6 +6,17 @@ from assistente_estudos.core.state import StudyState
 
 
 def simulation_node(state: StudyState) -> StudyState:
-    """Executa a etapa estrutural de simulação do plano."""
+    """Executa o workflow de simulação adaptativa.
 
-    pass
+    TODO: mapear os campos de StudyState para SimulationState antes de invocar o grafo.
+    """
+    from assistente_estudos.nodes.simulation.graph import build_simulation_graph
+
+    graph = build_simulation_graph()
+    resultado = graph.invoke({
+        "usuario_id": state.get("session_id"),
+        "current_plan": state.get("current_plan", {}),
+        "nivel_dificuldade": state.get("simulation_input", {}).get("nivel_dificuldade", "intermediario"),
+    })
+
+    return {**state, "simulation_output": resultado.get("simulation_output", {})}

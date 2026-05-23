@@ -1,8 +1,4 @@
-"""Nó responsável pelo replanejamento do roteiro de estudos.
-
-Esta etapa será usada quando o plano precisar ser ajustado por mudança de
-objetivo, restrições ou resultado de análise.
-"""
+﻿"""Ponte entre o grafo principal e o sub-grafo de replanejamento."""
 
 from __future__ import annotations
 
@@ -10,6 +6,18 @@ from assistente_estudos.core.state import StudyState
 
 
 def replan_node(state: StudyState) -> StudyState:
-    """Ajusta o plano de estudos com base no estado atual."""
+    """Executa o workflow de replanejamento do cronograma.
 
-    pass
+    TODO: mapear os campos de StudyState para ReplanState antes de invocar o grafo.
+    """
+    from assistente_estudos.nodes.replan.graph import build_replan_graph
+
+    graph = build_replan_graph()
+    resultado = graph.invoke({
+        "usuario_id": state.get("session_id"),
+        "current_plan": state.get("current_plan", {}),
+        "replanning_reason": state.get("replanning_reason"),
+        "constraints": state.get("constraints", {}),
+    })
+
+    return {**state, "current_plan": resultado.get("updated_plan", state.get("current_plan", {}))}
