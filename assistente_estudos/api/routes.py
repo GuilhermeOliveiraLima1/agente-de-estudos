@@ -27,6 +27,7 @@ from assistente_estudos.api.schemas import (
     HealthResponse,
     SessaoCreate,
     SessaoResponse,
+    GeneratePlanRequest,
     SimuladoCreate,
     SimuladoResponse,
     StudyStatePayload,
@@ -34,7 +35,7 @@ from assistente_estudos.api.schemas import (
     UsuarioResponse,
 )
 from assistente_estudos.config import API_PREFIX
-from assistente_estudos.db.models import ResultadoSimulado, ScoreProntidao, SessaoEstudo, Usuario
+from assistente_estudos.db.models import ResultadoSimulado, ScoreProntidao, SessaoEstudo, Usuario, StudyPlan
 from assistente_estudos.nodes.analysis_node import analysis_node
 from assistente_estudos.nodes.planner_node import planner_node
 from assistente_estudos.nodes.replan_node import replan_node
@@ -99,6 +100,81 @@ def registrar_sessao(dados: SessaoCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(sessao)
     return sessao
+
+
+# ---------------------------------------------------------------------------
+# Plano de Estudo
+# ---------------------------------------------------------------------------
+
+def _plan_to_dict(plan: StudyPlan) -> dict:
+    return {
+        "id": plan.id,
+        "usuario_id": plan.usuario_id,
+        "discipline": plan.discipline,
+        "subject": plan.subject,
+        "level": plan.level,
+        "exam_date": plan.exam_date,
+        "hours_per_day": plan.hours_per_day,
+        "plan_summary": {
+            "plan_title": plan.plan_title,
+            "summary": plan.summary,
+            "total_estimated_hours": plan.total_estimated_hours,
+            "personalized_message": plan.personalized_message,
+        },
+        "topics": plan.get_topics(),
+        "study_plan": plan.get_study_plan(),
+    }
+
+
+@router.post("/planos", tags=["planos"])
+def generate_plan(data: GeneratePlanRequest, db: Session = Depends(get_db)):
+    """Gera um plano de estudos completo com cronograma e revisões espaçadas."""
+    state = {
+        "discipline": data.discipline,
+        "subject": data.subject,
+        "level": data.level,
+        "exam_date": str(data.exam_date),
+        "hours_per_day": data.hours_per_day,
+        "session_id": data.usuario_id,
+    }
+    result = planner_node(state)
+
+    plan_summary = result["plan_summary"]
+    plan = StudyPlan(
+        usuario_id=data.usuario_id,
+        discipline=data.discipline,
+        subject=data.subject,
+        level=data.level,
+        exam_date=str(data.exam_date),
+        hours_per_day=data.hours_per_day,
+        plan_title=plan_summary["plan_title"],
+        summary=plan_summary["summary"],
+        total_estimated_hours=plan_summary["total_estimated_hours"],
+        personalized_message=plan_summary["personalized_message"],
+    )
+    plan.set_topics([t.model_dump() if hasattr(t, "model_dump") else t for t in result["topics"]])
+    plan.set_study_plan(result["study_plan"])
+
+    db.add(plan)
+    db.commit()
+    db.refresh(plan)
+    return _plan_to_dict(plan)
+
+
+@router.get("/planos", tags=["planos"])
+def list_plans(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
+    """Lista todos os planos gerados."""
+    plans = db.query(StudyPlan).order_by(StudyPlan.id.desc()).offset(skip).limit(limit).all()
+    return [_plan_to_dict(p) for p in plans]
+
+
+@router.get("/planos/{plan_id}", tags=["planos"])
+def get_plan(plan_id: int, db: Session = Depends(get_db)):
+    """Retorna um plano pelo ID."""
+    plan = db.query(StudyPlan).filter(StudyPlan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plano não encontrado.")
+    return _plan_to_dict(plan)
 
 
 # ---------------------------------------------------------------------------

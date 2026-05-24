@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+import json
 from datetime import datetime
 
 from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
@@ -24,6 +25,7 @@ class Usuario(Base):
     sessoes = relationship("SessaoEstudo", back_populates="usuario")
     simulados = relationship("ResultadoSimulado", back_populates="usuario")
     scores = relationship("ScoreProntidao", back_populates="usuario")
+    planos = relationship("StudyPlan", back_populates="usuario")
 
 
 class SessaoEstudo(Base):
@@ -41,6 +43,43 @@ class SessaoEstudo(Base):
     dificuldade_percebida = Column(Integer)  # escala 1-5
 
     usuario = relationship("Usuario", back_populates="sessoes")
+
+class StudyPlan(Base):
+    """Plano de estudo gerado pelo agente planner."""
+
+    __tablename__ = "study_plans"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    usuario_id = Column(String, ForeignKey("usuarios.id"), nullable=True)
+    discipline = Column(String(100), nullable=False)
+    subject = Column(String(100), nullable=False)
+    level = Column(String(20), nullable=False)
+    exam_date = Column(String(10), nullable=False)
+    hours_per_day = Column(Integer, nullable=False)
+
+    plan_title = Column(String(200), nullable=False)
+    summary = Column(Text, nullable=False)
+    total_estimated_hours = Column(String(50), nullable=False)
+    personalized_message = Column(Text, nullable=False)
+
+    topics_json = Column(Text, nullable=False)
+    study_plan_json = Column(Text, nullable=False)
+
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+    usuario = relationship("Usuario", back_populates="planos")
+
+    def set_topics(self, topics: list) -> None:
+        self.topics_json = json.dumps(topics, ensure_ascii=False)
+
+    def get_topics(self) -> list:
+        return json.loads(self.topics_json)
+
+    def set_study_plan(self, study_plan: list) -> None:
+        self.study_plan_json = json.dumps(study_plan, ensure_ascii=False)
+
+    def get_study_plan(self) -> list:
+        return json.loads(self.study_plan_json)
 
 
 class ResultadoSimulado(Base):

@@ -6,19 +6,17 @@ from typing import Any, Dict, List, Optional, TypedDict
 
 
 class PlannerState(TypedDict, total=False):
-    # --- Entrada (preenchida pela rota antes de invocar o grafo) ---
+    # --- Entrada ---
     usuario_id: str
-    study_goal: str
-    subjects: List[str]
-    priority_subjects: List[str]
-    available_time_hours: float
-    study_days_per_week: int
-    learning_preferences: Dict[str, Any]
-    constraints: Dict[str, Any]
+    discipline: str
+    subject: str
+    level: str
+    exam_date: str
+    hours_per_day: int
 
-    # --- Saída (preenchida pelos nós) ---
-    current_plan: Dict[str, Any]   # cronograma gerado
-    plano_id: str                  # ID do registro salvo no banco
+    # --- Saída ---
+    topics: List[Any]
+    study_plan: List[Any]
+    plan_summary: Dict[str, Any]
 
-    # Erro, se houver
     erro: Optional[str]

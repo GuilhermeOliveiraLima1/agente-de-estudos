@@ -17,8 +17,23 @@ class StudyState(TypedDict, total=False):
     análise e geração de relatório.
     """
 
+    # --- Identificação de sessão/usuário ---
     session_id: str
     user_name: str
+
+    # --- Entradas do planner (StudyFlowAI) ---
+    discipline: str
+    subject: str
+    level: str
+    exam_date: str
+    hours_per_day: int
+
+    # --- Saídas do planner (StudyFlowAI) ---
+    topics: List[Any]          # lista de Topic gerados pelo LLM
+    study_plan: List[Any]      # cronograma dia-a-dia
+    plan_summary: Dict[str, Any]  # título, resumo, horas estimadas, mensagem
+
+    # --- Campos do fluxo geral (agente-de-estudos) ---
     study_goal: str
     available_time_hours: float
     study_days_per_week: int
@@ -33,8 +48,7 @@ class StudyState(TypedDict, total=False):
     analysis_output: Dict[str, Any]
     report_data: Dict[str, Any]
     report_text: str
-    llm_provider: str
-    llm_model: str
-    messages: List[Dict[str, Any]]
     metadata: Dict[str, Any]
+
     error_message: NotRequired[str]
+
