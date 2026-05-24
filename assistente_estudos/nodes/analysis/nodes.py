@@ -189,23 +189,35 @@ def identificar_fragilidades_node(state: AnalysisState) -> AnalysisState:
 # ---------------------------------------------------------------------------
 
 def gerar_parecer_node(state: AnalysisState) -> AnalysisState:
-    """Invoca o LLM com tools para gerar um parecer personalizado."""
+    """Pré-computa os resultados das tools e invoca o LLM para gerar o parecer."""
     from langchain_core.messages import HumanMessage, SystemMessage
     from langchain_ollama import ChatOllama
 
-    from assistente_estudos.nodes.analysis.tools import TOOLS
+    from assistente_estudos.nodes.analysis.tools import (
+        calcular_media_por_topico,
+        detectar_tendencia_semanal,
+        identificar_topicos_criticos,
+    )
 
     ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     ollama_model = os.getenv("OLLAMA_MODEL", "llama3:8b")
 
-    llm = ChatOllama(model=ollama_model, base_url=ollama_url)
-    llm_com_tools = llm.bind_tools(TOOLS)
+    # Pré-computa os resultados das tools diretamente (sem bind_tools)
+    simulados = state.get("resultados_simulados", [])
+    medias_por_topico = calcular_media_por_topico.func(simulados) if simulados else {}
+    scores_historicos = [r["taxa_acerto"] * 100 for r in simulados]
+    tendencia_semanal = detectar_tendencia_semanal.func(scores_historicos) if len(scores_historicos) >= 2 else "sem_historico_suficiente"
+    topicos_criticos = identificar_topicos_criticos.func(medias_por_topico, 0.6) if medias_por_topico else []
 
     classificacao_legivel = {
         "risco_alto": "Risco Alto (0–50)",
         "moderado": "Moderado (51–75)",
         "alta_probabilidade": "Alta Probabilidade (76–100)",
     }.get(state.get("classificacao", ""), state.get("classificacao", ""))
+
+    medias_formatadas = ", ".join(
+        f"{t}: {v*100:.1f}%" for t, v in medias_por_topico.items()
+    ) or "Sem dados"
 
     prompt = (
         f"Analise o desempenho acadêmico do estudante e gere um parecer personalizado.\n\n"
@@ -215,21 +227,22 @@ def gerar_parecer_node(state: AnalysisState) -> AnalysisState:
         f"- Score de Domínio (acerto nos simulados): {state.get('score_dominio')}%\n"
         f"- Score de Consistência (sessões concluídas): {state.get('score_consistencia')}%\n"
         f"- Score de Retenção (evolução ao longo do tempo): {state.get('score_retencao')}%\n"
-        f"- Tópicos Frágeis: {', '.join(state.get('topicos_frageis', [])) or 'Nenhum identificado'}\n"
-        f"- Tendência: {state.get('tendencia')}\n"
+        f"- Média por tópico: {medias_formatadas}\n"
+        f"- Tópicos críticos (abaixo de 60%): {', '.join(topicos_criticos) or 'Nenhum'}\n"
+        f"- Tendência de desempenho: {tendencia_semanal}\n"
         f"- Sessões de estudo analisadas: {len(state.get('sessoes', []))}\n"
-        f"- Simulados realizados: {len(state.get('resultados_simulados', []))}\n\n"
-        f"Use as ferramentas disponíveis se precisar de cálculos adicionais. "
-        f"Depois, redija um parecer em português com 3 parágrafos: "
+        f"- Simulados realizados: {len(simulados)}\n\n"
+        f"Redija um parecer em português com exatamente 3 parágrafos: "
         f"(1) pontos fortes, (2) o que precisa melhorar, (3) ações concretas para a próxima semana."
     )
 
+    llm = ChatOllama(model=ollama_model, base_url=ollama_url)
     mensagens = [
         SystemMessage(content="Você é um analista de desempenho acadêmico experiente. Seja direto, empático e propositivo."),
         HumanMessage(content=prompt),
     ]
 
-    resposta = llm_com_tools.invoke(mensagens)
+    resposta = llm.invoke(mensagens)
     parecer = resposta.content if hasattr(resposta, "content") else str(resposta)
 
     return {**state, "parecer_llm": parecer}
