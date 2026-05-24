@@ -12,7 +12,7 @@ Sistema backend que ajuda estudantes a organizar, acompanhar e analisar seus est
 - [Como o sistema é organizado](#-como-o-sistema-é-organizado)
 - [Mapa de pastas](#-mapa-de-pastas)
 - [Como funciona por dentro](#-como-funciona-por-dentro)
-- [Como desenvolver seu agente](#-como-desenvolver-seu-agente)
+- [Fluxos implementados](#-fluxos-implementados)
 - [Rotas disponíveis na API](#-rotas-disponíveis-na-api)
 - [Banco de dados](#-banco-de-dados)
 - [Subindo com Docker](#-subindo-com-docker)
@@ -150,92 +150,71 @@ Pense no estado como uma **mochila de dados**. Cada agente pega a mochila, coloc
 
 ---
 
-## 🧩 Como desenvolver seu agente
+## ✅ Fluxos implementados
 
-Todo o esqueleto já está pronto. Você precisa preencher as funções marcadas com `TODO` dentro de `nodes/SEU_AGENTE/nodes.py`.
+### Agente 1 — Geração de Plano Personalizado (`planner`)
 
-### Passo a passo
+Endpoint: `POST /api/planos`
 
-**1. Abra `nodes/SEU_AGENTE/nodes.py` e preencha as funções**
+Recebe disciplina, assunto, nível, data da prova e horas disponíveis por dia. Executa 4 passos internos:
 
-Cada função recebe os dados do estado, faz alguma coisa, e devolve o estado atualizado:
-
-```python
-def gerar_cronograma_node(state: PlannerState) -> PlannerState:
-    # TODO: criar o cronograma com base nas preferências do usuário
-
-    cronograma = ...  # sua lógica aqui
-
-    return {**state, "current_plan": cronograma}
-    #        ↑ sempre mantenha os dados anteriores com **state
+```
+coletar_preferencias → gerar_cronograma → validar_cronograma → persistir_cronograma
 ```
 
-> ⚠️ **Importante:** sempre retorne `{**state, "campo": valor}`. Nunca retorne `None` ou um dicionário vazio — isso quebra o fluxo.
+**Como funciona:**
+1. **coletar_preferencias** — normaliza os dados de entrada do usuário
+2. **gerar_cronograma** — chama o LLM com `with_structured_output` para gerar uma lista de tópicos com título, descrição, dificuldade, horas estimadas, dicas e critérios de conclusão
+3. **validar_cronograma** — confere se o cronograma respeita as restrições (horas/dia, prazo)
+4. **persistir_cronograma** — o `scheduler.py` distribui os tópicos pelos dias e insere revisões espaçadas automaticamente (D+1, D+7, D+14); o resultado é salvo na tabela `study_plans`
 
----
-
-**2. Para salvar ou buscar dados no banco**
-
-```python
-from assistente_estudos.db.database import SessionLocal
-from assistente_estudos.db.models import SessaoEstudo
-
-def persistir_cronograma_node(state: PlannerState) -> PlannerState:
-    db = SessionLocal()   # abre conexão com o banco
-    try:
-        registro = SessaoEstudo(usuario_id=state["usuario_id"], ...)
-        db.add(registro)
-        db.commit()
-        return {**state, "plano_id": registro.id}
-    finally:
-        db.close()        # sempre feche — libera a conexão
+**Exemplo de chamada:**
+```bash
+curl -X POST http://localhost:8000/api/planos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "discipline": "Matematica",
+    "subject": "Calculo Diferencial",
+    "level": "intermediario",
+    "exam_date": "2026-07-01",
+    "hours_per_day": 2,
+    "usuario_id": "uuid-do-usuario"
+  }'
 ```
 
 ---
 
-**3. Para usar a IA (LLM) dentro de um passo**
+### Agente 4 — Análise de Desempenho e Score de Prontidão (`analysis`)
 
-```python
-import os
-from langchain_ollama import ChatOllama
-from assistente_estudos.nodes.SEU_AGENTE.tools import TOOLS
+Endpoint: `POST /api/analise/{usuario_id}`
 
-llm = ChatOllama(
-    model=os.getenv("OLLAMA_MODEL", "llama3:8b"),
-    base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-)
-resposta = llm.bind_tools(TOOLS).invoke(mensagens)
+Analisa as sessões de estudo e simulados registrados do usuário nos últimos N dias e gera um parecer completo. Executa 6 passos internos:
+
+```
+coletar_dados → calcular_scores → calcular_prontidao
+→ identificar_fragilidades → gerar_parecer → persistir_resultado
 ```
 
----
+**Como funciona:**
+1. **coletar_dados** — busca no banco todas as `sessoes_estudo` e `resultados_simulados` do usuário no período
+2. **calcular_scores** — computa três métricas:
+   - **Score Domínio** — média de acerto nos simulados (0–100)
+   - **Score Consistência** — % de sessões de estudo concluídas (0–100)
+   - **Score Retenção** — evolução entre a primeira e segunda metade dos simulados (0–100)
+3. **calcular_prontidao** — aplica a fórmula `(Domínio × 0.5) + (Consistência × 0.3) + (Retenção × 0.2)` e classifica o resultado:
+   - `risco_alto` — índice ≤ 50
+   - `moderado` — índice entre 51 e 75
+   - `alta_probabilidade` — índice > 75
+4. **identificar_fragilidades** — lista tópicos com média de acerto abaixo de 60% e detecta tendência (`melhorando`, `estavel` ou `piorando`)
+5. **gerar_parecer** — pré-computa as métricas via funções auxiliares (`calcular_media_por_topico`, `detectar_tendencia_semanal`, `identificar_topicos_criticos`) e passa tudo ao LLM, que gera um parecer em 3 parágrafos: pontos fortes, o que melhorar e ações concretas para a próxima semana
+6. **persistir_resultado** — salva tudo na tabela `scores_prontidao`
 
-**4. Para criar uma "tool" (função que a IA pode chamar)**
+**Pré-requisitos para a análise retornar dados úteis:** o usuário precisa ter sessões de estudo registradas via `POST /api/sessoes` e simulados via `POST /api/simulados`.
 
-Abra `nodes/SEU_AGENTE/tools.py`:
-
-```python
-from langchain_core.tools import tool
-
-@tool
-def calcular_horas_disponiveis(dias_por_semana: int, horas_por_dia: float) -> float:
-    """Calcula o total de horas disponíveis por semana.
-    A IA usa a descrição acima para saber quando chamar esta função.
-    """
-    return dias_por_semana * horas_por_dia
-
-TOOLS = [calcular_horas_disponiveis]
+**Exemplo de chamada:**
+```bash
+curl -X POST http://localhost:8000/api/analise/uuid-do-usuario?periodo_dias=30
 ```
-
----
-
-### O que você precisa mexer × o que não precisa
-
-| Você mexe | Não precisa mexer |
-|---|---|
-| `nodes/SEU_AGENTE/nodes.py` — lógica dos passos | `nodes/SEU_AGENTE_node.py` — a porta de entrada já está conectada |
-| `nodes/SEU_AGENTE/tools.py` — funções para a IA | `nodes/SEU_AGENTE/graph.py` — a ordem dos passos já está definida |
-| `nodes/SEU_AGENTE/state.py` — se precisar de novos campos | `api/routes.py` — a rota HTTP já existe |
-| | `db/models.py` — as tabelas já estão criadas |
 
 ---
 
@@ -379,46 +358,25 @@ db.commit()
 
 ## 🐳 Subindo com Docker
 
-Docker garante que **todos da equipe rodam o sistema no mesmo ambiente**, sem precisar instalar PostgreSQL, Ollama ou configurar nada manualmente.
+Para instruções completas de infraestrutura — requisitos de memória, configuração do Docker Desktop, download do modelo de IA e solução de problemas — consulte o **[SETUP.md](SETUP.md)**.
 
-### O que sobe junto
+### Resumo rápido
 
-| Serviço | Porta | O que é |
-|---|---|---|
-| `postgres` | 5432 | Banco de dados |
-| `pgadmin` | 5050 | Tela visual para ver o banco no navegador |
-| `ollama` | 11434 | A IA rodando localmente |
-| `backend` | 8000 | O servidor deste projeto |
-
-> Os dados do banco e os modelos de IA ficam salvos em volumes — não somem quando você desliga o Docker.
-
-### Como subir
-
-**1. Copie o arquivo de configuração:**
 ```bash
+# 1. Configurar variáveis de ambiente
 cp .env.example .env
-```
-Não precisa alterar nada para rodar localmente — os valores já estão corretos para Docker.
 
-**2. Suba tudo:**
-```bash
-docker compose up --build
-```
+# 2. Subir os containers
+docker compose up -d
 
-**3. Baixe o modelo de IA (só precisa fazer isso uma vez):**
-```bash
-docker compose exec ollama ollama pull llama3:8b
+# 3. Baixar o modelo de IA (obrigatório, feito uma única vez)
+docker exec agente-de-estudos-ollama-1 ollama pull llama3.2:1b
+
+# 4. Verificar que está tudo ok
+curl http://localhost:8000/api/health
 ```
 
-**4. Pronto! Acesse:**
-
-| O que | Endereço | Login |
-|---|---|---|
-| API | `http://localhost:8000` | — |
-| Documentação visual da API | `http://localhost:8000/docs` | — |
-| Banco de dados (visual) | `http://localhost:5050` | `admin@estudos.com` / `admin123` |
-
-### Outros comandos
+### Outros comandos úteis
 
 ```bash
 # Desligar os serviços
@@ -427,8 +385,11 @@ docker compose down
 # Desligar e apagar todos os dados (banco + modelos de IA)
 docker compose down -v
 
-# Ver o que está acontecendo no servidor em tempo real
+# Ver os logs do servidor em tempo real
 docker compose logs -f backend
+
+# Aplicar mudanças no .env sem perder outros containers
+docker compose up -d backend
 ```
 
 ---
