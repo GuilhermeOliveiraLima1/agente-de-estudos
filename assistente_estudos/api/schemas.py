@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+from datetime import date
 
 from pydantic import BaseModel, Field
 
@@ -56,6 +57,33 @@ class SessaoResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
+# ---------------------------------------------------------------------------
+# Plano de Estudo
+# ---------------------------------------------------------------------------
+
+class GeneratePlanRequest(BaseModel):
+    discipline: str
+    subject: str
+    level: str
+    exam_date: date
+    hours_per_day: int
+    usuario_id: Optional[str] = None
+
+
+class PlanResponse(BaseModel):
+    id: int
+    usuario_id: Optional[str]
+    discipline: str
+    subject: str
+    level: str
+    exam_date: str
+    hours_per_day: int
+    plan_summary: Dict[str, Any]
+    topics: List[Any]
+    study_plan: List[Any]
+
+    model_config = {"from_attributes": True}
 
 # ---------------------------------------------------------------------------
 # Simulados

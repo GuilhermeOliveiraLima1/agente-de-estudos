@@ -4,18 +4,17 @@ Este módulo será responsável, no futuro, por encapsular chamadas ao modelo,
 mantendo o restante da aplicação independente do provedor.
 """
 
-from __future__ import annotations
+import os
+from langchain_ollama import ChatOllama
 
 
-class LLMService:
-    """Interface estrutural para o provedor de linguagem."""
+def get_llm(temperature: float = 0.3) -> ChatOllama:
+    return ChatOllama(
+        model=os.getenv("OLLAMA_MODEL", "llama3:8b"),
+        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        temperature=temperature,
+    )
 
-    def __init__(self) -> None:
-        """Inicializa a camada de serviço de linguagem."""
 
-        pass
-
-    def generate(self, prompt: str) -> str:
-        """Gera uma resposta textual para um prompt recebido."""
-
-        pass
+# Instância padrão reutilizável
+llm = get_llm()
