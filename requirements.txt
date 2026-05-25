@@ -1,9 +1,11 @@
 langgraph
 langchain
 langchain-ollama
+langchain-core
 ollama
 pydantic
 fastapi
 uvicorn
 sqlalchemy
 psycopg2-binary
+python-dotenv
