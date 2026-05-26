@@ -10,7 +10,7 @@ from langchain_ollama import ChatOllama
 
 def get_llm(temperature: float = 0.3) -> ChatOllama:
     return ChatOllama(
-        model=os.getenv("OLLAMA_MODEL", "llama3:8b"),
+        model=os.getenv("OLLAMA_MODEL", "llama3.2:1b"),
         base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         temperature=temperature,
     )

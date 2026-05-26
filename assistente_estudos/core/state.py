@@ -21,19 +21,19 @@ class StudyState(TypedDict, total=False):
     session_id: str
     user_name: str
 
-    # --- Entradas do planner (StudyFlowAI) ---
+    # --- Entradas do planner ---
     discipline: str
     subject: str
     level: str
     exam_date: str
     hours_per_day: int
 
-    # --- Saídas do planner (StudyFlowAI) ---
+    # --- Saídas do planner ---
     topics: List[Any]          # lista de Topic gerados pelo LLM
     study_plan: List[Any]      # cronograma dia-a-dia
     plan_summary: Dict[str, Any]  # título, resumo, horas estimadas, mensagem
 
-    # --- Campos do fluxo geral (agente-de-estudos) ---
+    # --- Campos do fluxo geral ---
     study_goal: str
     available_time_hours: float
     study_days_per_week: int
