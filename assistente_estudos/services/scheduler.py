@@ -17,6 +17,8 @@ def create_schedule(
     superarem hours_per_day. Também insere revisões espaçadas (D+1, D+7, D+14).
     """
     current_day = date.today()
+    if exam_date is None:
+        exam_date = current_day + timedelta(days=30)
     schedule = []
 
     for topic in topics:

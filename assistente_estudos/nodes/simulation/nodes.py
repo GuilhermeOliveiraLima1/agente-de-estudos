@@ -206,16 +206,12 @@ def _parse_llm_response(response: Any) -> List[Dict[str, Any]]:
 
 def _invoke_llm_with_timeout(prompt: str, timeout_seconds: int = 15) -> Any:
     """Invoca o LLM com timeout; retorna o resultado ou lança concurrent.futures.TimeoutError."""
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-        future = ex.submit(llm.invoke, prompt)
-        try:
-            return future.result(timeout=timeout_seconds)
-        except concurrent.futures.TimeoutError:
-            try:
-                future.cancel()
-            except Exception:
-                pass
-            raise
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(llm.invoke, prompt)
+    try:
+        return future.result(timeout=timeout_seconds)
+    finally:
+        executor.shutdown(wait=False)
 
 
 def preparar_simulacao_node(state: SimulationState) -> SimulationState:

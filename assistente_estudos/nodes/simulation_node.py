@@ -22,7 +22,7 @@ def _build_simulation_state(state: StudyState) -> Dict[str, Any]:
         quantity_questions = simulation_input.get("quantity_questions")
 
     mapped_state: Dict[str, Any] = {
-        "usuario_id": state.get("session_id") or state.get("user_name"),
+        "usuario_id": state.get("usuario_id") or state.get("session_id") or state.get("user_name"),
         "current_plan": {
             **current_plan,
             "topics": _extract_topics(current_plan),
