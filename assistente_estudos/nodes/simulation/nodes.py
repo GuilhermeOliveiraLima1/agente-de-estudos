@@ -14,7 +14,8 @@ from typing import Any, Dict, List
 from sqlalchemy.exc import SQLAlchemyError
 
 from assistente_estudos.db.database import SessionLocal
-from assistente_estudos.db.models import ResultadoSimulado
+from assistente_estudos.db.models import ResultadoSimulado, Usuario
+from assistente_estudos.nodes.simulation.schemas import GeneratedSimulationQuestions
 from assistente_estudos.nodes.simulation.state import SimulationState
 from assistente_estudos.services.llm_service import llm
 
@@ -24,8 +25,9 @@ def _fallback_questions(topic: str, difficulty: str) -> List[Dict[str, Any]]:
     return [
         {
             "topico": base,
+            "disciplina": "geral",
             "pergunta": f"Em uma questão sobre {base}, qual alternativa melhor representa o conteúdo central?",
-            "opcoes": [
+            "alternativas": [
                 f"Conceito principal de {base}",
                 "Uma ideia sem relação com o tema",
                 "Um detalhe secundário isolado",
@@ -36,8 +38,9 @@ def _fallback_questions(topic: str, difficulty: str) -> List[Dict[str, Any]]:
         },
         {
             "topico": base,
+            "disciplina": "geral",
             "pergunta": f"Como {base} pode aparecer em um contexto aplicado?",
-            "opcoes": [
+            "alternativas": [
                 f"Na resolução de problemas ligados a {base}",
                 "Apenas em memorização mecânica",
                 "Sem nenhuma aplicação prática",
@@ -48,8 +51,9 @@ def _fallback_questions(topic: str, difficulty: str) -> List[Dict[str, Any]]:
         },
         {
             "topico": base,
+            "disciplina": "geral",
             "pergunta": f"Ao estudar {base}, qual atitude ajuda mais no desempenho?",
-            "opcoes": [
+            "alternativas": [
                 "Resolver exercícios com contexto",
                 "Ignorar exemplos",
                 "Decorar respostas sem entender",
@@ -80,12 +84,18 @@ def _extract_topics(state: SimulationState) -> List[str]:
     return []
 
 
+def _extract_discipline(state: SimulationState) -> str:
+    current_plan = state.get("current_plan", {}) or {}
+    discipline = current_plan.get("discipline") or current_plan.get("disciplina")
+    return str(discipline).strip() if discipline else "geral"
+
+
 def _build_prompt(topic: str, difficulty: str, quantity: int) -> str:
     return (
         f"Gere {quantity} questões de múltipla escolha sobre '{topic}' (dificuldade: {difficulty}). "
-        "Retorne SOMENTE um JSON válido (lista). "
-        "Cada item: id, topico, pergunta, opcoes (4 strings), resposta_correta (uma das opções). "
-        "Seja direto; não inclua explicações extras."
+        "Retorne SOMENTE JSON válido no formato { questoes: [ ... ] }. "
+        "Cada questão deve conter: topico, disciplina, pergunta, alternativas (4 strings), resposta_correta e dificuldade. "
+        "Use exatamente 4 alternativas e não inclua texto extra."
     )
 
 
@@ -117,8 +127,11 @@ def _parse_llm_response(response: Any) -> List[Dict[str, Any]]:
             continue
 
         pergunta = _get_field(item, ["pergunta", "question", "prompt", "texto"])
-        opcoes = _get_field(item, ["opcoes", "alternativas", "options", "choices", "alternatives"])
+        opcoes = _get_field(item, ["alternativas", "opcoes", "options", "choices", "alternatives"])
         resposta = _get_field(item, ["resposta_correta", "gabarito", "answer", "correct", "resposta"])
+        topico = _get_field(item, ["topico", "topic"])
+        disciplina = _get_field(item, ["disciplina", "discipline"])
+        dificuldade = _get_field(item, ["dificuldade", "difficulty"])
 
         if pergunta is None:
             continue
@@ -197,8 +210,12 @@ def _parse_llm_response(response: Any) -> List[Dict[str, Any]]:
 
         normalized.append({
             "pergunta": str(pergunta).strip(),
+            "topico": str(topico).strip() if topico else "tema",
+            "disciplina": str(disciplina).strip() if disciplina else "geral",
+            "alternativas": cleaned,
             "opcoes": cleaned,
             "resposta_correta": resposta_correta,
+            "dificuldade": str(dificuldade).strip() if dificuldade else "intermediario",
         })
 
     return normalized
@@ -214,12 +231,23 @@ def _invoke_llm_with_timeout(prompt: str, timeout_seconds: int = 15) -> Any:
         executor.shutdown(wait=False)
 
 
+def _invoke_structured_llm_with_timeout(llm_client: Any, prompt: str, timeout_seconds: int = 15) -> Any:
+    """Invoca um cliente com saída estruturada dentro do mesmo mecanismo de timeout."""
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(llm_client.invoke, prompt)
+    try:
+        return future.result(timeout=timeout_seconds)
+    finally:
+        executor.shutdown(wait=False)
+
+
 def preparar_simulacao_node(state: SimulationState) -> SimulationState:
     """Gera as questões do simulado adaptadas ao plano e nível do usuário.
 
     Usa o LLM quando disponível e faz fallback local se a resposta vier inválida.
     """
     difficulty = state.get("nivel_dificuldade", "intermediario")
+    discipline = _extract_discipline(state)
     topics = _extract_topics(state)
     requested = int(state.get("quantity_questions") or 5)
     if requested < 1:
@@ -241,8 +269,8 @@ def preparar_simulacao_node(state: SimulationState) -> SimulationState:
             continue
 
         try:
-            # tente chamar o LLM com timeout; em caso de TimeoutError irá para fallback
-            response = _invoke_llm_with_timeout(_build_prompt(topic, difficulty, per_topic), timeout_seconds=12)
+            structured_llm = llm.with_structured_output(GeneratedSimulationQuestions)
+            response = _invoke_structured_llm_with_timeout(structured_llm, _build_prompt(topic, difficulty, per_topic), timeout_seconds=12)
             # guarde resposta bruta para depuração se necessário
             try:
                 state.setdefault("llm_raw_responses", []).append(getattr(response, "content", response))
@@ -262,7 +290,10 @@ def preparar_simulacao_node(state: SimulationState) -> SimulationState:
 
         for item in parsed:
             item.setdefault("topico", topic)
+            item.setdefault("disciplina", discipline)
             item.setdefault("dificuldade", difficulty)
+            item.setdefault("alternativas", item.get("opcoes", []))
+            item.setdefault("opcoes", item.get("alternativas", []))
 
         questions.extend(parsed)
 
@@ -339,6 +370,8 @@ def executar_simulacao_node(state: SimulationState) -> SimulationState:
                 "resposta_correta": correct_answer,
                 "correto": is_correct,
                 "topico": question.get("topico"),
+                "disciplina": question.get("disciplina"),
+                "alternativas": question.get("alternativas") or question.get("opcoes") or [],
             }
         )
 
@@ -431,10 +464,22 @@ def persistir_simulacao_node(state: SimulationState) -> SimulationState:
         por_topico = simulation_output.get("por_topico", {}) or {}
         current_plan = state.get("current_plan", {}) or {}
         disciplina_padrao = str(current_plan.get("discipline") or current_plan.get("disciplina") or current_plan.get("subject") or "simulacao")
+        user_name = str(state.get("user_name") or usuario_id).strip()
 
         db = SessionLocal()
         inserted_ids: List[str] = []
         try:
+            usuario_exists = db.query(Usuario).filter(Usuario.id == str(usuario_id)).first()
+            if not usuario_exists:
+                db.add(
+                    Usuario(
+                        id=str(usuario_id),
+                        nome=user_name or "Usuario",
+                        email=f"{str(usuario_id)}@local.invalid",
+                    )
+                )
+                db.flush()
+
             if por_topico:
                 for topico, resumo in por_topico.items():
                     total_questoes = int(resumo.get("total", 0) or 0)
