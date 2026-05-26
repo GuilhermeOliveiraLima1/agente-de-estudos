@@ -57,9 +57,6 @@ def replan_node(state: StudyState) -> StudyState:
 
 
 
-    """TODO: mapear os campos de StudyState para ReplanState antes de invocar o grafo.
-    """
-
     graph = build_replan_graph()
     resultado = graph.invoke({
         "usuario_id": state.get("usuario_id") or state.get("session_id"),
@@ -68,9 +65,7 @@ def replan_node(state: StudyState) -> StudyState:
         "sessoes_realizadas": sessoes_realizadas,
         "resultados_simulados": resultados_simulados,
         "constraints": state.get("constraints", {}),
-    }
-
-    resultado = graph.invoke(input_data)
+    })
 
     return {
         **state,

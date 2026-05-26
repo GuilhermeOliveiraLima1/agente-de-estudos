@@ -26,7 +26,11 @@ def analisar_desvio_node(state: ReplanState) -> ReplanState:
 
     topicos_estudados: Set[str] = set()
     horas_estudadas_por_topico: Dict[str, float] = {}
-    topicos_planejados = current_plan.get("topicos", [])
+    _raw = current_plan.get("topicos") or current_plan.get("topics", [])
+    topicos_planejados = [
+        t if isinstance(t, dict) else {"nome": str(t), "disciplina": current_plan.get("discipline", "")}
+        for t in _raw
+    ]
 
     for sessao in sessoes_realizadas:
         topico = sessao.get("topico", "")
@@ -112,8 +116,8 @@ def recalcular_cronograma_node(state: ReplanState) -> ReplanState:
     desvios_altos = [d for d in desvios if d.get("Severidade") == "alta"]
 
     topicos_priorizados: List[Dict[str, Any]] = []
-    topicos_originais = [dict(t) for t in current_plan.get("topicos", [])]
-    topicos_existentes = {f"{t.get('disciplina', '')}: {t.get('nome', '')}": dict(t) for t in topicos_originais}
+    topicos_originais = [dict(t) if isinstance(t, dict) else {"nome": str(t)} for t in (current_plan.get("topicos") or current_plan.get("topics", []))]
+    topicos_existentes = {f"{t.get('disciplina', '')}: {t.get('nome') or t.get('title', '')}": dict(t) for t in topicos_originais}
 
     for desvio in desvios_altos:
         topico_nome = desvio.get("topico", "")
