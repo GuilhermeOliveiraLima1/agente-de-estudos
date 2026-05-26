@@ -11,11 +11,13 @@ class ReplanState(TypedDict, total=False):
     current_plan: Dict[str, Any]      # cronograma atual
     replanning_reason: str            # motivo do replanejamento
     sessoes_realizadas: List[Dict]    # o que foi de fato estudado
+    resultados_simulados: List[Dict]   # resultados de simulados realizados
     constraints: Dict[str, Any]
+
+    desvios: List[Dict[str, Any]]
 
     # --- Saída ---
     updated_plan: Dict[str, Any]      # novo cronograma
-    desvios: List[str]                # lista de desvios identificados
     replan_id: str                    # ID do registro salvo no banco
 
     # Erro, se houver
