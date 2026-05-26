@@ -18,6 +18,7 @@ class StudyState(TypedDict, total=False):
     """
 
     # --- Identificação de sessão/usuário ---
+    usuario_id: str
     session_id: str
     user_name: str
 

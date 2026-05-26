@@ -14,7 +14,7 @@ def replan_node(state: StudyState) -> StudyState:
 
     graph = build_replan_graph()
     resultado = graph.invoke({
-        "usuario_id": state.get("session_id"),
+        "usuario_id": state.get("usuario_id") or state.get("session_id"),
         "current_plan": state.get("current_plan", {}),
         "replanning_reason": state.get("replanning_reason"),
         "constraints": state.get("constraints", {}),
