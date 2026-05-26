@@ -147,6 +147,7 @@ class StudyStatePayload(BaseModel):
     constraints: Dict[str, Any] = Field(default_factory=dict)
     current_plan: Dict[str, Any] = Field(default_factory=dict)
     replanning_reason: Optional[str] = None
+    quantity_questions: Optional[int] = 5
     simulation_input: Dict[str, Any] = Field(default_factory=dict)
     simulation_output: Dict[str, Any] = Field(default_factory=dict)
     analysis_output: Dict[str, Any] = Field(default_factory=dict)
