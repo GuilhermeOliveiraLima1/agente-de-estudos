@@ -136,17 +136,25 @@ class AnaliseResponse(BaseModel):
 class StudyStatePayload(BaseModel):
     """Payload de entrada para as rotas de agentes."""
 
+    usuario_id: Optional[str] = None
     session_id: Optional[str] = None
     user_name: Optional[str] = None
     study_goal: Optional[str] = None
     available_time_hours: Optional[float] = None
     study_days_per_week: Optional[int] = None
+    # campos do planner
+    discipline: Optional[str] = None
+    subject: Optional[str] = None
+    level: Optional[str] = None
+    exam_date: Optional[date] = None
+    hours_per_day: Optional[int] = None
     subjects: List[str] = Field(default_factory=list)
     priority_subjects: List[str] = Field(default_factory=list)
     learning_preferences: Dict[str, Any] = Field(default_factory=dict)
     constraints: Dict[str, Any] = Field(default_factory=dict)
     current_plan: Dict[str, Any] = Field(default_factory=dict)
     replanning_reason: Optional[str] = None
+    quantity_questions: Optional[int] = 5
     simulation_input: Dict[str, Any] = Field(default_factory=dict)
     simulation_output: Dict[str, Any] = Field(default_factory=dict)
     analysis_output: Dict[str, Any] = Field(default_factory=dict)

@@ -6,7 +6,8 @@ from statistics import mean
 from typing import List
 
 from langchain_core.tools import tool
-
+import re
+from datetime import datetime
 
 @tool
 def calcular_media_notas(notas: List[float]) -> str:
@@ -77,14 +78,27 @@ def gerar_recomendacoes(media: float) -> str:
 @tool
 def formatar_relatorio(texto: str) -> str:
     """
-    Formata o texto do relatório.
+    Formata e padroniza o relatório final
+    para exibição amigável no frontend.
     """
 
-    return (
-        "===== RELATÓRIO EDUCACIONAL =====\n\n"
-        f"{texto}\n\n"
-        "===== FIM DO RELATÓRIO ====="
-    )
+    texto = texto.strip()
+    texto = re.sub(r"\n{3,}", "\n\n", texto)
+    texto = texto.replace("### ", "📄 ")   # transforma títulos do modelo em ícones
+    texto = texto.replace("**", "")
+
+    agora = datetime.utcnow().strftime("%d/%m/%Y %H:%M")
+
+    return f"""
+📘 RELATÓRIO EDUCACIONAL
+────────────────────────────
+Gerado em: {agora}
+
+{texto}
+
+────────────────────────────
+Assistente de Estudos
+""".strip()
 
 
 TOOLS = [

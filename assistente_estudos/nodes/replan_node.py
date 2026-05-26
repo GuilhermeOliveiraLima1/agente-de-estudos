@@ -61,9 +61,8 @@ def replan_node(state: StudyState) -> StudyState:
     """
 
     graph = build_replan_graph()
-
-    input_data ={
-        "usuario_id": usuario_id,
+    resultado = graph.invoke({
+        "usuario_id": state.get("usuario_id") or state.get("session_id"),
         "current_plan": state.get("current_plan", {}),
         "replanning_reason": state.get("replanning_reason", "Ajustes baseados no progresso real"),
         "sessoes_realizadas": sessoes_realizadas,

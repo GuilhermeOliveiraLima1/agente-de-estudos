@@ -14,7 +14,7 @@ def report_node(state: StudyState) -> StudyState:
 
     graph = build_report_graph()
     resultado = graph.invoke({
-        "usuario_id": state.get("session_id"),
+        "usuario_id": state.get("usuario_id") or state.get("session_id"),
         "analysis_output": state.get("analysis_output", {}),
         "simulation_output": state.get("simulation_output", {}),
         "current_plan": state.get("current_plan", {}),

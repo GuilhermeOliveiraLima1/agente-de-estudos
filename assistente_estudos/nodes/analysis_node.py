@@ -9,9 +9,9 @@ def analysis_node(state: StudyState) -> StudyState:
     """Executa o workflow completo de análise de desempenho."""
     from assistente_estudos.nodes.analysis.graph import build_analysis_graph
 
-    usuario_id = state.get("session_id")
+    usuario_id = state.get("usuario_id") or state.get("session_id")
     if not usuario_id:
-        return {**state, "error_message": "session_id ausente: não é possível executar a análise."}
+        return {**state, "error_message": "usuario_id ausente: não é possível executar a análise."}
 
     graph = build_analysis_graph()
     resultado = graph.invoke({"usuario_id": usuario_id, "periodo_dias": 30})
